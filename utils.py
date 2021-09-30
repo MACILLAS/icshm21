@@ -9,6 +9,7 @@ from scipy.signal import argrelextrema
 from scipy.ndimage import gaussian_filter
 import random
 import time
+import tensorflow as tf
 
 
 def clear_and_create(dir='./train_out'):
@@ -173,24 +174,24 @@ def whatComponent(label_mask, mask, cluster, threshold=0.75):
 
     threshold_pixs = int(threshold*area_cluster)
     if num_wall > threshold_pixs:
-        if decision(0.1):
+        if decision(1):
             return 0
         else:
             return 200
     elif num_beam > threshold_pixs:
         return 1
     elif num_column > threshold_pixs:
-        if decision(0.2):
+        if decision(1):
             return 2
         else:
             return 200
     elif num_window_frame > threshold_pixs:
-        if decision(0.5):
+        if decision(1):
             return 3
         else:
             return 200
     elif num_window_pane > threshold_pixs:
-        if decision(0.25):
+        if decision(1):
             return 4
         else:
             return 200
@@ -199,59 +200,25 @@ def whatComponent(label_mask, mask, cluster, threshold=0.75):
     elif num_slab > threshold_pixs:
         return 6
     elif num_ignore > threshold_pixs:
-        if np.average(cluster) <= 1:
-            return 200
-        else:
-            return 100
+        #if np.average(cluster) <= 1:
+        #    return 200
+        #else:
+        return 100
     else:
         return 200
 
-def is_crack(idx, mask):
-    label_mask = cv2.imread(os.path.join(label_dir, crack_dir, train_list[0].iloc[idx]), -1)
-    label_mask = label_mask[:, :, 0] + label_mask[:, :, 1] + label_mask[:, :, 2]
-    label_mask = np.clip(label_mask, 0, 1)
-    area_cluster = np.sum(mask)
-    # print(area_cluster)
-    # print(mask.shape)
-    # print(label_mask.shape)
-    temp = mask + label_mask
-    intersection = np.where(temp == 2)
-    area_intersection = np.sum(intersection)
-    # print(area_intersection)
-    cross_ratio = area_intersection / area_cluster
-    # cuz cracks are small keep this threshold low
-    if cross_ratio > 0.25:
-        return True
-    else:
-        return False
+def preprocessImages (img, imgsize = 224):
+    '''
+    Run raw images through here to be processed then send into model.
+    This function normalizes img in ranges [-1, 1] and resizes to them to imgsize
+    :param img:
+    :param imgsize: 224 (default) depends on trained model
+    :return: img normalized between -1 and 1 and resized to imgsize x imgsize
+    '''
+    # Assume in float32 format
+    img = (img / 127.5) - 1
+    img = cv2.resize(img, (224, 224))
+    img = img.reshape(1, 224, 224, 3)
+    return img
 
-
-def is_spall(idx, mask):
-    label_mask = cv2.imread(os.path.join(label_dir, spall_dir, train_list[0].iloc[idx]), -1)
-    label_mask = label_mask[:, :, 0] + label_mask[:, :, 1] + label_mask[:, :, 2]
-    label_mask = np.clip(label_mask, 0, 1)
-    area_cluster = np.sum(mask)
-    # print(area_cluster)
-    temp = mask + label_mask
-    intersection = np.where(temp == 2)
-    area_intersection = np.sum(intersection)
-    cross_ratio = area_intersection / area_cluster
-    if cross_ratio > 0.75:
-        return True
-    else:
-        return False
-
-
-def is_rebar(idx, mask):
-    label_mask = cv2.imread(os.path.join(label_dir, rebar_dir, train_list[0].iloc[idx]), -1)
-    label_mask = label_mask[:, :, 0] + label_mask[:, :, 1] + label_mask[:, :, 2]
-    label_mask = np.clip(label_mask, 0, 1)
-    area_cluster = np.sum(mask)
-    temp = mask + label_mask
-    intersection = np.where(temp == 2)
-    area_intersection = np.sum(intersection)
-    cross_ratio = area_intersection / area_cluster
-    if cross_ratio > 0.25:
-        return True
-    else:
-        return False
+### let's take the save_mask from USP repo

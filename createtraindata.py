@@ -10,7 +10,7 @@ from scipy.ndimage import gaussian_filter
 import random
 import time
 
-from utils import clear_and_create, segment_foreground, is_crack, is_spall, is_rebar, get_rect, whatComponent
+from utils import clear_and_create, segment_foreground, get_rect, whatComponent
 
 IMGDIR = "./image"
 LABELDIR = "./label"
@@ -33,11 +33,11 @@ if __name__ == "__main__":
     clear_and_create(TRAINDIR)
     clear_and_create(WALLDIR)
     clear_and_create(BEAMDIR)
-    clear_and_create(COLDIR)
+    #clear_and_create(COLDIR)
     clear_and_create(WINFRAMEDIR)
     clear_and_create(WINPANEDIR)
     clear_and_create(BALCDIR)
-    clear_and_create(SLABDIR)
+    #clear_and_create(SLABDIR)
     clear_and_create(IGNOREDIR)
 
     # Number of Entries
@@ -50,20 +50,23 @@ if __name__ == "__main__":
         img_file = train_list[0].iloc[idx]
         # read RGB image
         img = cv2.imread(os.path.join(IMGDIR, img_file), -1)
+        #img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
         # read depth image
-        depth_img = cv2.imread(os.path.join(LABELDIR, DEPTHDIR, img_file), -1)
-        try:
-            # foreground img
-            foregnd_img = segment_foreground(img, depth_img, is_pil=False, save=False)
-        except Exception:
-            print("ERROR")
-            continue
+        #depth_img = cv2.imread(os.path.join(LABELDIR, DEPTHDIR, img_file), -1)
+        #try:
+        #    # foreground img
+        #    foregnd_img = segment_foreground(img, depth_img, is_pil=False, save=False)
+        #except Exception:
+        #    print("ERROR")
+        #    continue
+        foregnd_img = img
         # component_label
         component_label = cv2.imread(os.path.join(LABELDIR, COMPDIR, img_file))
         try:
             # generate superpixels (SEEDS algorithm)
-            seeds = cv2.ximgproc.createSuperpixelSEEDS(foregnd_img.shape[1], foregnd_img.shape[0], foregnd_img.shape[2], 200, 5, 3, 15, True)
-            seeds.iterate(foregnd_img, 25)  # The input image size must be the same as the initial shape, the number of iterations is 10
+            #seeds = cv2.ximgproc.createSuperpixelSEEDS(foregnd_img.shape[1], foregnd_img.shape[0], foregnd_img.shape[2], 300, 5, 3, 15, True)
+            seeds = cv2.ximgproc.createSuperpixelSLIC(foregnd_img, region_size=50)
+            seeds.iterate(50)  # The input image size must be the same as the initial shape, the number of iterations is 10
         except Exception:
             print("SuperpixelSEEDS Error")
             continue
@@ -103,10 +106,10 @@ if __name__ == "__main__":
             '''
             if comp_indx == 0:
                 outfile = os.path.join(WALLDIR, cropped_file)
-            elif comp_indx == 1:
+            elif comp_indx == 1 or comp_indx == 2:
                 outfile = os.path.join(BEAMDIR, cropped_file)
-            elif comp_indx == 2:
-                outfile = os.path.join(COLDIR, cropped_file)
+            #elif comp_indx == 2:
+            #    outfile = os.path.join(COLDIR, cropped_file)
             elif comp_indx == 3:
                 outfile = os.path.join(WINFRAMEDIR, cropped_file)
             elif comp_indx == 4:
@@ -114,7 +117,8 @@ if __name__ == "__main__":
             elif comp_indx == 5:
                 outfile = os.path.join(BALCDIR, cropped_file)
             elif comp_indx == 6:
-                outfile = os.path.join(SLABDIR, cropped_file)
+                #outfile = os.path.join(SLABDIR, cropped_file)
+                continue
             elif comp_indx == 100:
                 outfile = os.path.join(IGNOREDIR, cropped_file)
             else:
