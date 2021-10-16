@@ -43,11 +43,11 @@ def appendList (proto_csv=None, files=None, label=None, gstorage_url=None):
     for i in range(len(files)):
         if decision(0.2):
             if decision(0.5):
-                proto_csv.append(['test', join(gstorage_url, label, files[i]), label])
+                proto_csv.append(['test', join(gstorage_url, 'train', label, files[i]), label])
             else:
-                proto_csv.append(['validation', join(gstorage_url, label, files[i]), label])
+                proto_csv.append(['validation', join(gstorage_url, 'train', label, files[i]), label])
         else:
-            proto_csv.append(['training', join(gstorage_url, label, files[i]), label])
+            proto_csv.append(['training', join(gstorage_url, 'train', label, files[i]), label])
 
     return proto_csv
 

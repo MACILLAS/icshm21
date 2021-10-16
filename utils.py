@@ -217,8 +217,8 @@ def preprocessImages (img, imgsize = 224):
     '''
     # Assume in float32 format
     img = (img / 127.5) - 1
-    img = cv2.resize(img, (224, 224))
-    img = img.reshape(1, 224, 224, 3)
+    img = cv2.resize(img, (imgsize, imgsize))
+    img = img.reshape(1, imgsize, imgsize, 3)
     return img
 
 ### let's take the save_mask from USP repo

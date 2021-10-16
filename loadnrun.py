@@ -23,7 +23,8 @@ def predict_component(model=None, img=None):
     pred_class_conf = np.max(prediction)
     return pred_class, pred_class_conf
 
-def saveMask (row, col, chn, im_target, name): # Code borrowed from USP
+
+def saveMask(row, col, chn, im_target, name):  # Code borrowed from USP
     # Define label_colours
     label_colours = np.random.randint(255, size=(100, 3))
     im_target_rgb = np.array([label_colours[c % 100] for c in im_target])
@@ -31,11 +32,126 @@ def saveMask (row, col, chn, im_target, name): # Code borrowed from USP
     # Save mask (colourized)
     cv2.imwrite("output" + str(name) + ".png", im_target_rgb)
 
-if __name__ == "__main__":
-    # VARIABLE DECLARATION
-    idx = 0
 
-    conf_threshold = 0.7
+def segment_image(conf_threshold=0.8, img=None, model=None, seeds=None):
+    """
+
+    :param conf_threshold:
+    :param img:
+    :param model:
+    :param seeds:
+    :return:
+    """
+    # We use variable to start building up the full mask
+    full_segmentation = np.zeros(img.shape[:2])
+    # Take an image split it into superpixels then run classifier on each superpixel
+    mask_seeds = seeds.getLabelContourMask()
+    label_seeds = seeds.getLabels()
+    number_seeds = seeds.getNumberOfSuperpixels()
+    mask_inv_seeds = cv2.bitwise_not(mask_seeds)
+    img_seeds = cv2.bitwise_and(img, img, mask=mask_inv_seeds)
+
+    # loop through each superpixel
+    for v in np.unique(label_seeds):
+        # construct a mask for the segment so we can compute image statistics for *only* the masked region
+        mask = np.zeros(img.shape[:2])
+        # mask is the same size of the image
+        # where the superpixel is the mask value '1'
+        mask[label_seeds == v] = 1
+        cluster = (img * np.stack([mask, mask, mask], axis=2))
+        # get cropped small image
+        cropped = get_rect(cluster, mask, False)
+
+        # cropped_file = str(v) + '_' + img_file
+        # print(v)
+        # print(cluster.shape)
+        # print(cropped_file)
+
+        # preprocess cropped for inference
+        # get the predicted class for that cluster
+        cropped_pre = preprocessImages(cropped, imgsize=71)
+        # if np.mean(cropped) < 0.5 : pred_class = 9, pred_class_conf = 1
+
+        # if np.mean(cropped) < 1:
+        #     pred_class = 9
+        #     pred_class_conf = 1
+        # else:
+        #    pred_class, pred_class_conf = predict_component(model, cropped_pre)
+        pred_class, pred_class_conf = predict_component(model, cropped_pre)
+
+        ### DEBUG CODE ###
+        # print(f"Predicted class: {pred_class} with Confidence of: {pred_class_conf}")
+
+        # when the predicted class confidence is greater than the confidence threshold...
+        # 'add' the semantic segmentation to the full_segmentation
+        if pred_class_conf >= conf_threshold:
+            full_segmentation = full_segmentation + mask * pred_class
+        else:
+            full_segmentation = full_segmentation + mask * 200
+
+    # Current Class Mapping  --> Submission Mapping
+    # 0 balcony --> 5
+    # 1 is beam --> 1
+    # 2 is ignore --> 100
+    # 3 is wall --> 0
+    # 4 is windowframe --> 3
+    # 5 is windowpane --> 4
+    # 200 is uncertain --> 200
+    balcony_mask = (full_segmentation == 0) * 5
+    beam_mask = (full_segmentation == 1) * 1
+    ignore_mask = (full_segmentation == 2) * 100
+    wall_mask = (full_segmentation == 3) * 0
+    window_frame_mask = (full_segmentation == 4) * 3
+    window_pane_mask = (full_segmentation == 5) * 4
+    uncertain_mask = (full_segmentation == 200) * 99
+
+    # Recombine Masks
+    post_processed_seg = balcony_mask + beam_mask + ignore_mask + wall_mask + window_frame_mask + window_pane_mask + uncertain_mask
+    return post_processed_seg
+
+
+def main(conf_threshold=0.8, files='test.csv', model_dir='./saved_model/trained_model.h5'):
+    # create empty directory called ./kaggle_label
+    clear_and_create('./kaggle_label')
+    # create subdirectory ./kaggle_label/component
+    clear_and_create('./kaggle_label/component')
+    # set confidence threshold
+    conf_threshold = conf_threshold
+    # read in files in csv with pandas as test_list
+    test_list = pd.read_csv(files, header=None)
+    # load the model from model directory (expecting in h5 format)
+    model = tf.keras.models.load_model(model_dir)
+
+    # loop through every image in test set
+    for idx in range(test_list.size):
+        img_file = test_list[0].iloc[idx]  # image at index idx of set
+        # read RGB image in image file to img
+        img = cv2.imread(os.path.join(IMGDIR, img_file), -1)
+
+        # generate superpixels
+        try:
+            # generate superpixels (SLIC algorithm)
+            seeds = cv2.ximgproc.createSuperpixelSLIC(img, region_size=50)
+            seeds.iterate(50)  # The input image size must be the same as the initial shape, the number of iterations is 10
+        except Exception:
+            print("SuperpixelSEEDS Error")
+            raise ChildProcessError
+
+        post_processed_seg = segment_image(conf_threshold=conf_threshold, img=img, model=model, seeds=seeds)
+        ## DEBUG ##
+        #saveMask(img.shape[0], img.shape[1], 3, post_processed_seg.astype(int), 'debug_segmentation')
+        # save the image in the kaggle_label directory
+        cv2.imwrite(os.path.join('./kaggle_label/component', img_file), post_processed_seg)
+
+
+
+if __name__ == "__main__":
+    main()
+    '''
+    # VARIABLE DECLARATION
+    idx = 100
+
+    conf_threshold = 0.8
 
     # load in the list of test set
     test_list = pd.read_csv('test.csv', header=None)
@@ -46,12 +162,12 @@ if __name__ == "__main__":
     # read RGB image
     img = cv2.imread(os.path.join(IMGDIR, img_file), -1)
     # read depth image
-    depth_img = cv2.imread(os.path.join(LABELDIR, DEPTHDIR, img_file), -1)
+    # depth_img = cv2.imread(os.path.join(LABELDIR, DEPTHDIR, img_file), -1)
 
     # get the foreground img
-    #try:
+    # try:
     #    foregnd_img = segment_foreground(img, depth_img, is_pil=False, save=False)
-    #except Exception:
+    # except Exception:
     #    print("ERROR")
     #    raise ChildProcessError
     foregnd_img = img
@@ -59,8 +175,9 @@ if __name__ == "__main__":
     # generate superpixels
     try:
         # generate superpixels (SEEDS algorithm)
-        seeds = cv2.ximgproc.createSuperpixelSEEDS(foregnd_img.shape[1], foregnd_img.shape[0], foregnd_img.shape[2], 300, 5, 3, 15, True)
-        seeds.iterate(foregnd_img, 50)  # The input image size must be the same as the initial shape, the number of iterations is 10
+        # seeds = cv2.ximgproc.createSuperpixelSEEDS(foregnd_img.shape[1], foregnd_img.shape[0], foregnd_img.shape[2], 300, 5, 3, 15, True)
+        seeds = cv2.ximgproc.createSuperpixelSLIC(foregnd_img, region_size=50)
+        seeds.iterate(50)  # The input image size must be the same as the initial shape, the number of iterations is 10
     except Exception:
         print("SuperpixelSEEDS Error")
         raise ChildProcessError
@@ -85,28 +202,55 @@ if __name__ == "__main__":
         # get cropped small image
         cropped = get_rect(cluster, mask, False)
 
-        #cropped_file = str(v) + '_' + img_file
+        # cropped_file = str(v) + '_' + img_file
         # print(v)
         # print(cluster.shape)
         # print(cropped_file)
 
         # preprocess cropped for inference
         # get the predicted class for that cluster
-        cropped_pre = preprocessImages(cropped)
+        cropped_pre = preprocessImages(cropped, imgsize=71)
         # if np.mean(cropped) < 0.5 : pred_class = 9, pred_class_conf = 1
-        if np.mean(cropped) < 1:
-            pred_class = 9
-            pred_class_conf = 1
-        else:
-            pred_class, pred_class_conf = predict_component(model, cropped_pre)
+
+        # if np.mean(cropped) < 1:
+        #     pred_class = 9
+        #     pred_class_conf = 1
+        # else:
+        #    pred_class, pred_class_conf = predict_component(model, cropped_pre)
+        pred_class, pred_class_conf = predict_component(model, cropped_pre)
 
         ### DEBUG CODE ###
-        #print(f"Predicted class: {pred_class} with Confidence of: {pred_class_conf}")
+        # print(f"Predicted class: {pred_class} with Confidence of: {pred_class_conf}")
 
         # when the predicted class confidence is greater than the confidence threshold...
         # 'add' the semantic segmentation to the full_segmentation
         if pred_class_conf >= conf_threshold:
-            full_segmentation = full_segmentation + mask*pred_class
+            full_segmentation = full_segmentation + mask * pred_class
+        else:
+            full_segmentation = full_segmentation + mask * 200
+
+    # Current Class Mapping  --> Submission Mapping
+    # 0 balcony --> 5
+    # 1 is beam --> 1
+    # 2 is ignore --> 100
+    # 3 is wall --> 0
+    # 4 is windowframe --> 3
+    # 5 is windowpane --> 4
+    # 200 is uncertain --> 200
+
+    balcony_mask = (full_segmentation == 0) * 5
+    beam_mask = (full_segmentation == 1) * 1
+    ignore_mask = (full_segmentation == 2) * 100
+    wall_mask = (full_segmentation == 3) * 0
+    window_frame_mask = (full_segmentation == 4) * 3
+    window_pane_mask = (full_segmentation == 5) * 4
+    uncertain_mask = (full_segmentation == 200) * 99
+
+    # Recombine Masks
+    post_processed_seg = balcony_mask + beam_mask + ignore_mask + wall_mask + window_frame_mask + window_pane_mask + uncertain_mask
 
     ### DEBUG CODE ###
-    saveMask(foregnd_img.shape[0], foregnd_img.shape[1], 3, full_segmentation.astype(int), 'debug_segmentation')
+    # saveMask(foregnd_img.shape[0], foregnd_img.shape[1], 3, full_segmentation.astype(int), 'debug_segmentation')
+    saveMask(foregnd_img.shape[0], foregnd_img.shape[1], 3, post_processed_seg.astype(int), 'debug_segmentation')
+    print("STOP")
+    '''
