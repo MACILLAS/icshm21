@@ -1,6 +1,7 @@
+import numpy
 import tensorflow as tf
 import cv2
-from utils import clear_and_create, segment_foreground, get_rect, preprocessImages
+from utils import clear_and_create, segment_foreground, get_rect, preprocess_images
 import numpy as np
 import pandas as pd
 import os
@@ -24,13 +25,13 @@ def predict_component(model=None, img=None):
     return pred_class, pred_class_conf
 
 
-def saveMask(row, col, chn, im_target, name):  # Code borrowed from USP
+def save_mask(row: int, col: int, chn: int, im_target, save_dir: str):  # Code borrowed from USP
     # Define label_colours
     label_colours = np.random.randint(255, size=(100, 3))
     im_target_rgb = np.array([label_colours[c % 100] for c in im_target])
     im_target_rgb = im_target_rgb.reshape(row, col, chn).astype(np.uint8)
-    # Save mask (colourized)
-    cv2.imwrite("output" + str(name) + ".png", im_target_rgb)
+    # Save colourized mask
+    cv2.imwrite("debug_"+save_dir, im_target_rgb)
 
 
 def segment_image(conf_threshold=0.8, img=None, model=None, seeds=None):
@@ -69,7 +70,7 @@ def segment_image(conf_threshold=0.8, img=None, model=None, seeds=None):
 
         # preprocess cropped for inference
         # get the predicted class for that cluster
-        cropped_pre = preprocessImages(cropped, imgsize=71)
+        cropped_pre = preprocess_images(cropped, imgsize=71)
         # if np.mean(cropped) < 0.5 : pred_class = 9, pred_class_conf = 1
 
         # if np.mean(cropped) < 1:
@@ -115,6 +116,7 @@ def main(conf_threshold=0.8, files='test.csv', model_dir='./saved_model/trained_
     clear_and_create('./kaggle_label')
     # create subdirectory ./kaggle_label/component
     clear_and_create('./kaggle_label/component')
+    clear_and_create('./debug_output')
     # set confidence threshold
     conf_threshold = conf_threshold
     # read in files in csv with pandas as test_list
@@ -124,6 +126,7 @@ def main(conf_threshold=0.8, files='test.csv', model_dir='./saved_model/trained_
 
     # loop through every image in test set
     for idx in range(test_list.size):
+        print(idx)
         img_file = test_list[0].iloc[idx]  # image at index idx of set
         # read RGB image in image file to img
         img = cv2.imread(os.path.join(IMGDIR, img_file), -1)
@@ -134,12 +137,12 @@ def main(conf_threshold=0.8, files='test.csv', model_dir='./saved_model/trained_
             seeds = cv2.ximgproc.createSuperpixelSLIC(img, region_size=50)
             seeds.iterate(50)  # The input image size must be the same as the initial shape, the number of iterations is 10
         except Exception:
-            print("SuperpixelSEEDS Error")
-            raise ChildProcessError
+            print("SuperpixelSLIC Error")
+            #raise ChildProcessError
 
         post_processed_seg = segment_image(conf_threshold=conf_threshold, img=img, model=model, seeds=seeds)
         ## DEBUG ##
-        #saveMask(img.shape[0], img.shape[1], 3, post_processed_seg.astype(int), 'debug_segmentation')
+        save_mask(img.shape[0], img.shape[1], 3, post_processed_seg.astype(int), os.path.join('debug_output', img_file))
         # save the image in the kaggle_label directory
         cv2.imwrite(os.path.join('./kaggle_label/component', img_file), post_processed_seg)
 

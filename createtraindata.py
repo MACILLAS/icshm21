@@ -10,7 +10,7 @@ from scipy.ndimage import gaussian_filter
 import random
 import time
 
-from utils import clear_and_create, segment_foreground, get_rect, whatComponent
+from utils import clear_and_create, segment_foreground, get_rect, what_component
 
 IMGDIR = "./image"
 LABELDIR = "./label"
@@ -91,7 +91,7 @@ if __name__ == "__main__":
             # print(cluster.shape)
             # print(cropped_file)
 
-            comp_indx = whatComponent(label_mask=component_label, mask=mask, cluster=cluster, threshold=0.85)
+            comp_indx = what_component(label_mask=component_label, mask=mask, cluster=cluster, threshold=0.85)
             '''
             0 - wall - (202, 150, 150)
             1 - beam - (198, 186, 100)

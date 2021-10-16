@@ -132,7 +132,7 @@ def decision(probability):
     '''
     return random.random() < probability
 
-def whatComponent(label_mask, mask, cluster, threshold=0.75):
+def what_component(label_mask, mask, cluster, threshold=0.75):
     """
     This function takes the mask of the superpixel and the label...
     Calculate how many pixels in the mask belong to each class as a ratio to the total number of pixels
@@ -207,7 +207,7 @@ def whatComponent(label_mask, mask, cluster, threshold=0.75):
     else:
         return 200
 
-def preprocessImages (img, imgsize = 224):
+def preprocess_images (img, imgsize = 224):
     '''
     Run raw images through here to be processed then send into model.
     This function normalizes img in ranges [-1, 1] and resizes to them to imgsize
